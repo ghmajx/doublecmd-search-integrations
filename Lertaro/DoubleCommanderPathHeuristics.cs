@@ -22,7 +22,8 @@ public static class DoubleCommanderPathHeuristics
         if (string.IsNullOrWhiteSpace(className))
             return false;
 
-        return className.StartsWith("TfrmMain", StringComparison.OrdinalIgnoreCase);
+        return className.StartsWith("TfrmMain", StringComparison.OrdinalIgnoreCase)
+            || className.Equals("TTOTAL_CMD", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsFileListClass(string? className)

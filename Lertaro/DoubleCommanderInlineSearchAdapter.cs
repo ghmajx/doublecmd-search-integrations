@@ -132,7 +132,18 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         if (IsPanelControl(mainWindow, focused)
             && DoubleCommanderNativeMethods.TryGetWindowRect(focused, out bounds))
         {
+            DoubleCommanderNativeMethods.PublishActivePanel(mainWindow, focused);
             source = "focus";
+            return true;
+        }
+
+        // Panel recorded while Double Commander still had the focus (published by the hook process on every
+        // focus change, so a panel switched with Tab is followed as well).
+        var published = DoubleCommanderNativeMethods.GetPublishedActivePanel(mainWindow);
+        if (IsPanelControl(mainWindow, published)
+            && DoubleCommanderNativeMethods.TryGetWindowRect(published, out bounds))
+        {
+            source = "published";
             return true;
         }
 

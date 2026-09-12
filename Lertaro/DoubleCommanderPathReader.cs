@@ -222,16 +222,20 @@ internal static class DoubleCommanderPathReader
         if (DoubleCommanderPathHeuristics.IsMainWindowClass(className))
             return true;
 
-        if (DoubleCommanderPathHeuristics.IsFileListClass(className))
-            return true;
+        var isPanel = DoubleCommanderPathHeuristics.IsFileListClass(className)
+            || (DoubleCommanderPathHeuristics.IsGenericLclListHostClass(className)
+                && DoubleCommanderNativeMethods.GetRootWindow(focusedControl) == mainWindow
+                && DoubleCommanderNativeMethods.TryGetWindowRect(focusedControl, out var bounds)
+                && bounds.Width >= 120
+                && bounds.Height >= 120);
 
-        if (!DoubleCommanderPathHeuristics.IsGenericLclListHostClass(className))
-            return false;
+        // Remember the panel for the process that later positions the inline search window: by then Double
+        // Commander has lost the focus and cannot be asked which panel was active (a Tab switch leaves no
+        // other trace, and the mouse cursor is not a reliable stand-in).
+        if (isPanel)
+            DoubleCommanderNativeMethods.PublishActivePanel(mainWindow, focusedControl);
 
-        return DoubleCommanderNativeMethods.GetRootWindow(focusedControl) == mainWindow
-            && DoubleCommanderNativeMethods.TryGetWindowRect(focusedControl, out var bounds)
-            && bounds.Width >= 120
-            && bounds.Height >= 120;
+        return isPanel;
     }
 
     private static IntPtr FindCommandLine(IntPtr mainWindow)

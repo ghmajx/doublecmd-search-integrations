@@ -134,6 +134,16 @@ internal static class DoubleCommanderNativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool GetCursorPos(out NativePoint point);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool SetProp(IntPtr hwnd, string name, IntPtr value);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr GetProp(IntPtr hwnd, string name);
+
+    // Window property used to hand the focused panel from the hook process (which sees the focus) to the
+    // app process (which positions the inline window but can no longer see Double Commander's focus).
+    private const string ActivePanelPropertyName = "Lertaro.DoubleCommander.ActivePanel";
+
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint
     {
@@ -227,6 +237,21 @@ internal static class DoubleCommanderNativeMethods
         y = 0;
         return false;
     }
+
+    /// <summary>
+    /// Records which panel currently has the focus on the Double Commander window. Called from the process
+    /// that can see the focus, read back by the one that positions the inline search window.
+    /// </summary>
+    public static void PublishActivePanel(IntPtr mainWindow, IntPtr panel)
+    {
+        if (mainWindow == IntPtr.Zero || panel == IntPtr.Zero)
+            return;
+
+        _ = SetProp(mainWindow, ActivePanelPropertyName, panel);
+    }
+
+    public static IntPtr GetPublishedActivePanel(IntPtr mainWindow)
+        => mainWindow == IntPtr.Zero ? IntPtr.Zero : GetProp(mainWindow, ActivePanelPropertyName);
 
     public static bool IsVisible(IntPtr hwnd)
         => hwnd != IntPtr.Zero && IsWindowVisible(hwnd);

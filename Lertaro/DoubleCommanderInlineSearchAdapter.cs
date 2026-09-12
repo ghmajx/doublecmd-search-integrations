@@ -97,13 +97,31 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         if (mainWindow == IntPtr.Zero)
             mainWindow = hwnd;
 
+        // The caller usually passes the panel that had the focus when the inline search was summoned:
+        // Lertaro's keyboard hook re-broadcasts that focused control as the active window. That is the
+        // most precise anchor, and it stays correct when the user switched panels with Tab before typing.
+        if (IsPanelControl(mainWindow, hwnd)
+            && DoubleCommanderNativeMethods.TryGetWindowRect(hwnd, out var passedBounds))
+        {
+            rect = ToAdapterRect(passedBounds);
+            return true;
+        }
+
+        // Otherwise prefer the panel that currently holds the focus.
         var focused = DoubleCommanderNativeMethods.GetFocusedControl(mainWindow);
-        if (CanTrigger(
-                focused,
-                DoubleCommanderNativeMethods.GetClassNameValue(focused))
+        if (IsPanelControl(mainWindow, focused)
             && DoubleCommanderNativeMethods.TryGetWindowRect(focused, out var focusedBounds))
         {
             rect = ToAdapterRect(focusedBounds);
+            return true;
+        }
+
+        // Positioning normally happens after the inline window took the focus, and an inactive thread
+        // reports no focused control at all. Fall back to the panel under the mouse cursor: the inline
+        // search is summoned by typing over a panel, where the cursor usually still is.
+        if (TryGetPanelUnderCursor(mainWindow, out var cursorBounds))
+        {
+            rect = ToAdapterRect(cursorBounds);
             return true;
         }
 
@@ -117,6 +135,59 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
     }
 
     public bool CanEnterActionsMode(IntPtr hwnd) => hwnd != IntPtr.Zero;
+
+    private static bool TryGetPanelUnderCursor(IntPtr mainWindow, out NativeRect bounds)
+    {
+        bounds = default;
+
+        if (DoubleCommanderNativeMethods.TryGetCursorPosition(out var cursorX, out var cursorY))
+        {
+            var found = false;
+            var best = default(NativeRect);
+            foreach (var child in DoubleCommanderNativeMethods.EnumerateChildWindows(mainWindow))
+            {
+                if (!IsPanelControl(mainWindow, child)
+                    || !DoubleCommanderNativeMethods.TryGetWindowRect(child, out var childBounds)
+                    || !childBounds.Contains(cursorX, cursorY))
+                {
+                    continue;
+                }
+
+                // Nested panel controls can overlap at the cursor; keep the largest, which is the file list.
+                if (!found || childBounds.Width * childBounds.Height > best.Width * best.Height)
+                {
+                    best = childBounds;
+                    found = true;
+                }
+            }
+
+            if (found)
+            {
+                bounds = best;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPanelControl(IntPtr mainWindow, IntPtr control)
+    {
+        if (control == IntPtr.Zero)
+            return false;
+
+        var className = DoubleCommanderNativeMethods.GetClassNameValue(control);
+        if (DoubleCommanderPathHeuristics.IsEditorClass(className))
+            return false;
+
+        if (!DoubleCommanderPathHeuristics.IsListHostClass(className))
+            return false;
+
+        return DoubleCommanderNativeMethods.GetRootWindow(control) == mainWindow
+            && DoubleCommanderNativeMethods.TryGetWindowRect(control, out var bounds)
+            && bounds.Width >= 120
+            && bounds.Height >= 120;
+    }
 
     private static AdapterRect ToAdapterRect(NativeRect rect)
         => new()

@@ -12,6 +12,9 @@ internal readonly record struct NativeRect(int Left, int Top, int Right, int Bot
 
     public bool IsUsable => Width > 0 && Height > 0;
 
+    public bool Contains(int x, int y)
+        => x >= Left && x < Right && y >= Top && y < Bottom;
+
     public int HorizontalOverlap(NativeRect other)
         => Math.Max(0, Math.Min(Right, other.Right) - Math.Max(Left, other.Left));
 }
@@ -128,6 +131,16 @@ internal static class DoubleCommanderNativeMethods
     [DllImport("user32.dll")]
     private static extern bool UpdateWindow(IntPtr hwnd);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetCursorPos(out NativePoint point);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
     [DllImport("user32.dll")]
     private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
 
@@ -199,6 +212,20 @@ internal static class DoubleCommanderNativeMethods
 
         rect = new NativeRect(value.Left, value.Top, value.Right, value.Bottom);
         return rect.IsUsable;
+    }
+
+    public static bool TryGetCursorPosition(out int x, out int y)
+    {
+        if (GetCursorPos(out var point))
+        {
+            x = point.X;
+            y = point.Y;
+            return true;
+        }
+
+        x = 0;
+        y = 0;
+        return false;
     }
 
     public static bool IsVisible(IntPtr hwnd)

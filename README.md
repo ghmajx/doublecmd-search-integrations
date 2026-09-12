@@ -37,6 +37,35 @@ dotnet build .\Lertaro\DoubleCommander.csproj -c Release -p:LertaroSdkDll="C:\pa
 
 也可以把 `bin\Release\net10.0-windows\Lertaro.Plugins.DoubleCommander.dll` 手动复制到 Lertaro 的 `Plugins\DoubleCommander\` 目录，重启 Lertaro 后在插件设置中确认加载。
 
+## 安装和使用
+
+### 安装 Lertaro 插件
+
+1. 从 GitHub Release 下载 `Lertaro.Plugins.DoubleCommander.dll`，或者下载包含 DLL、README 和 LICENSE 的 ZIP。
+2. 在 Lertaro **App 根目录**下创建目录：
+
+   ```text
+   Plugins\DoubleCommander\
+   ```
+
+3. 将 `Lertaro.Plugins.DoubleCommander.dll` 放入该目录。不要把 Release DLL 放入本仓库的 `Lertaro\` 源码目录；源码目录和运行时插件目录不是同一个位置。
+4. 启动或重启 Lertaro，在 `Settings -> Plugins` 中确认插件已加载。
+5. 启动 Double Commander。将鼠标或键盘焦点放到左、右面板后，在 Lertaro 中搜索文件；打开目录或文件时，结果会回到对应的 Double Commander 面板。
+
+从源码构建并传入 `-p:LertaroRoot=...` 时，项目会自动把 DLL 复制到：
+
+```text
+<LertaroRoot>\App\bin\Release\net10.0-windows\Plugins\DoubleCommander\
+```
+
+Lertaro 官方开发指南约定第三方插件放在 App 根目录下的 `Plugins\<PluginName>\` 子目录，并在重启后自动扫描；本项目使用的插件目录名是 `DoubleCommander`。
+
+### 使用边界
+
+- 当前实现只适配 Windows 版 Double Commander。
+- 路径读取要求 Double Commander 主窗口可见；窗口不在前台、命令行已有输入或路径文本被省略时，插件会放弃该次临时读取。
+- Lertaro 插件负责搜索范围、内联搜索和结果跳转；Listary 桥接脚本是独立的自定义命令集成，不需要复制到 Lertaro 的插件目录。
+
 ## 自检
 
 路径识别规则不依赖正在运行的 Double Commander，可直接运行：
@@ -46,6 +75,15 @@ dotnet run --project .\tests\DoubleCommander.Heuristics.Tests.csproj
 ```
 
 真正的集成验收仍需要在本机启动 Double Commander，分别测试：普通路径、UNC 路径、中文路径、左右面板切换、标签页、管理员启动、映射盘和超长路径。若 Double Commander 命令行被隐藏、命令行中已有文字，或窗口不在前台，插件会放弃该次局部路径读取，避免打断用户输入。
+
+## 发布
+
+推送 `v*` 标签会自动运行 Windows/.NET 10 构建，并创建 GitHub Release，附带 DLL 和 ZIP：
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ## Listary 集成边界
 

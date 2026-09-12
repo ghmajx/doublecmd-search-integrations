@@ -22,8 +22,6 @@ internal readonly record struct NativeRect(int Left, int Top, int Right, int Bot
 internal static class DoubleCommanderNativeMethods
 {
     private const uint GaRoot = 2;
-    private const uint GwChild = 5;
-    private const uint GwHwndNext = 2;
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint WmSetRedraw = 0x000B;
     private const uint WmSetText = 0x000C;
@@ -154,9 +152,6 @@ internal static class DoubleCommanderNativeMethods
 
     [DllImport("user32.dll")]
     private static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc callback, IntPtr lParam);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
 
     [DllImport("user32.dll")]
     private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
@@ -420,26 +415,6 @@ internal static class DoubleCommanderNativeMethods
             result.Add(hwnd);
             return true;
         }, IntPtr.Zero);
-        return result;
-    }
-
-    /// <summary>
-    /// Direct children only. <see cref="EnumerateChildWindows"/> walks every descendant, which is not
-    /// usable for resolving a nested layout level by level.
-    /// </summary>
-    public static IReadOnlyList<IntPtr> EnumerateDirectChildren(IntPtr parent)
-    {
-        var result = new List<IntPtr>();
-        if (parent == IntPtr.Zero)
-            return result;
-
-        for (var child = GetWindow(parent, GwChild);
-             child != IntPtr.Zero;
-             child = GetWindow(child, GwHwndNext))
-        {
-            result.Add(child);
-        }
-
         return result;
     }
 

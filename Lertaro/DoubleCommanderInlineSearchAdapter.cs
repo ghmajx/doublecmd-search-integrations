@@ -166,62 +166,6 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         return false;
     }
 
-    /// <summary>
-    /// Resolves <paramref name="start"/> to the innermost file list below it. Every step only compares a
-    /// child with its own parent ("nearly as large"), so it works for any panel split ratio; the branch
-    /// to follow is picked with the mouse cursor when one of them contains it.
-    /// </summary>
-    private static bool TryResolvePanel(IntPtr mainWindow, IntPtr start, out NativeRect bounds)
-    {
-        bounds = default;
-        if (start == IntPtr.Zero || !DoubleCommanderNativeMethods.TryGetWindowRect(start, out var currentRect))
-            return false;
-
-        var current = start;
-        for (var depth = 0; depth < 8; depth++)
-        {
-            var next = IntPtr.Zero;
-            var nextRect = default(NativeRect);
-            var nextContainsCursor = false;
-            foreach (var child in DoubleCommanderNativeMethods.EnumerateDirectChildren(current))
-            {
-                if (!IsPanelControl(mainWindow, child)
-                    || !DoubleCommanderNativeMethods.TryGetWindowRect(child, out var childRect))
-                {
-                    continue;
-                }
-
-                // A real nested panel is nearly as large as its parent; smaller children are chrome.
-                if (childRect.Width * 2 < currentRect.Width || childRect.Height * 2 < currentRect.Height)
-                    continue;
-
-                var containsCursor = TryGetCursorInside(childRect);
-                var better = next == IntPtr.Zero
-                    || (containsCursor && !nextContainsCursor)
-                    || (containsCursor == nextContainsCursor
-                        && childRect.Width * childRect.Height > nextRect.Width * nextRect.Height);
-                if (better)
-                {
-                    next = child;
-                    nextRect = childRect;
-                    nextContainsCursor = containsCursor;
-                }
-            }
-
-            if (next == IntPtr.Zero)
-                break;
-
-            current = next;
-            currentRect = nextRect;
-        }
-
-        if (!IsPanelControl(mainWindow, current))
-            return false;
-
-        bounds = currentRect;
-        return true;
-    }
-
     private static bool TryResolvePanelUnderCursor(IntPtr mainWindow, out NativeRect bounds)
     {
         bounds = default;

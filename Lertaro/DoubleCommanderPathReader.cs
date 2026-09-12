@@ -134,7 +134,7 @@ internal static class DoubleCommanderPathReader
             var redrawSuspended = DoubleCommanderNativeMethods.SetWindowRedraw(commandLine, false);
             try
             {
-                var path = ReadCommandLinePath(commandLine);
+                var path = ReadCommandLinePath(mainWindow, focusedControl, commandLine);
                 if (path is not null)
                 {
                     CommandLinePathCache[mainWindow] = (now, focusedControl, path);
@@ -171,9 +171,14 @@ internal static class DoubleCommanderPathReader
     /// asynchronously by Double Commander, so the first read can still see an empty field. The command
     /// must not be sent twice -- it <em>appends</em> to the command line and would duplicate the path.
     /// </summary>
-    private static string? ReadCommandLinePath(IntPtr commandLine)
+    private static string? ReadCommandLinePath(IntPtr mainWindow, IntPtr focusedControl, IntPtr commandLine)
     {
-        DoubleCommanderNativeMethods.SendControlP();
+        // Ask the focused panel for the command; fall back to the main window when the caller only knows
+        // the top-level handle. The message goes straight to Double Commander -- nothing is injected
+        // globally, so it cannot reach another application.
+        var target = focusedControl != IntPtr.Zero ? focusedControl : mainWindow;
+        if (!DoubleCommanderNativeMethods.SendControlPTo(target))
+            return null;
 
         for (var attempt = 0; attempt < 3; attempt++)
         {

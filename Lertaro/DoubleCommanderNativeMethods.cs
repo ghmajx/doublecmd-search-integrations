@@ -20,10 +20,11 @@ internal static class DoubleCommanderNativeMethods
 {
     private const uint GaRoot = 2;
     private const uint ProcessQueryLimitedInformation = 0x1000;
-    private const uint KeyEventKeyUp = 0x0002;
     private const uint WmSetRedraw = 0x000B;
     private const uint WmSetText = 0x000C;
     private const uint WmGetText = 0x000D;
+    private const uint WmKeyDown = 0x0100;
+    private const uint WmKeyUp = 0x0101;
     private const uint SmtoBlock = 0x0001;
     private const uint SmtoAbortIfHung = 0x0002;
     private const uint TextMessageTimeoutMs = 150;
@@ -103,14 +104,29 @@ internal static class DoubleCommanderNativeMethods
         uint timeout,
         out IntPtr result);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", EntryPoint = "MapVirtualKeyW")]
+    private static extern uint MapVirtualKey(uint code, uint mapType);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool AttachThreadInput(uint attachThread, uint attachToThread, bool attach);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetKeyboardState(byte[] keyState);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetKeyboardState(byte[] keyState);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool InvalidateRect(IntPtr hwnd, IntPtr rect, bool erase);
 
     [DllImport("user32.dll")]
     private static extern bool UpdateWindow(IntPtr hwnd);
-
-    [DllImport("user32.dll")]
-    private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
@@ -241,12 +257,71 @@ internal static class DoubleCommanderNativeMethods
         return true;
     }
 
-    public static void SendControlP()
+    /// <summary>
+    /// Triggers Double Commander's cm_AddPathToCmdLine (Ctrl+P) by posting the key straight to its
+    /// window, with Ctrl marked as pressed in the target thread's own input state.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not keybd_event/SendInput: those inject into whatever window currently has the
+    /// foreground, so a focus change between the check and the keystroke leaks "Ctrl+P" into an unrelated
+    /// application (observed as the browser's print dialog) or leaves a stray "p" in a text box. A window
+    /// message can only be received by the target window, and attaching to its thread makes GetKeyState
+    /// report Ctrl as held for the duration of the message -- which is what the app's shortcut handling
+    /// looks at.
+    /// </remarks>
+    public static bool SendControlPTo(IntPtr targetWindow)
     {
-        keybd_event(VirtualKeyControl, 0, 0, UIntPtr.Zero);
-        keybd_event(VirtualKeyP, 0, 0, UIntPtr.Zero);
-        keybd_event(VirtualKeyP, 0, KeyEventKeyUp, UIntPtr.Zero);
-        keybd_event(VirtualKeyControl, 0, KeyEventKeyUp, UIntPtr.Zero);
+        if (targetWindow == IntPtr.Zero)
+            return false;
+
+        var targetThread = GetWindowThreadProcessId(targetWindow, out _);
+        if (targetThread == 0)
+            return false;
+
+        var currentThread = GetCurrentThreadId();
+        var attached = targetThread == currentThread
+            || AttachThreadInput(currentThread, targetThread, true);
+        if (!attached)
+            return false;
+
+        try
+        {
+            var state = new byte[256];
+            if (!GetKeyboardState(state))
+                return false;
+
+            var previousControlState = state[VirtualKeyControl];
+            state[VirtualKeyControl] = 0x80;
+            if (!SetKeyboardState(state))
+                return false;
+
+            try
+            {
+                _ = SendMessage(targetWindow, WmKeyDown, new IntPtr(VirtualKeyP), CreateKeyMessageParam(VirtualKeyP, keyUp: false));
+                _ = SendMessage(targetWindow, WmKeyUp, new IntPtr(VirtualKeyP), CreateKeyMessageParam(VirtualKeyP, keyUp: true));
+            }
+            finally
+            {
+                state[VirtualKeyControl] = previousControlState;
+                _ = SetKeyboardState(state);
+            }
+
+            return true;
+        }
+        finally
+        {
+            if (targetThread != currentThread)
+                _ = AttachThreadInput(currentThread, targetThread, false);
+        }
+    }
+
+    private static IntPtr CreateKeyMessageParam(byte virtualKey, bool keyUp)
+    {
+        var scanCode = MapVirtualKey(virtualKey, 0);
+        var param = 1L | ((long)scanCode << 16);
+        if (keyUp)
+            param |= 0xC0000000L;
+        return new IntPtr(param);
     }
 
     public static IntPtr GetRootWindow(IntPtr hwnd)

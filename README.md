@@ -15,6 +15,11 @@ Lertaro 部分的目标是让 Lertaro 在 Double Commander 中获得与官方 To
 
 Double Commander 没有 Total Commander 那种可用于“查询当前面板路径”的 WM_COPYDATA 协议。路径读取优先使用可暴露的窗口元数据；由于 Double Commander 的路径栏在 Lazarus/Windows 版本中可能是无 HWND 的图形控件，插件还会在活动文件列表、窗口处于前台且命令行为空时调用官方 `cm_AddPathToCmdLine`（默认快捷键 `Ctrl+P`）读取当前路径，随后恢复空命令行。代码不扫描文件系统，也不通过 `Directory.Exists` 判断结果，避免管理员权限和映射盘造成误判。
 
+Lazarus/LCL 还有两个必须绕开的行为，插件已按此实现：
+
+- 文件面板在 Double Commander 1.2 中是普通 `Window` 类控件，而不是 `LCLListBox`/`TMyListBox` 之类的专用类。这类控件只有在确认属于 Double Commander 主窗口、不是编辑类控件且尺寸达到面板规模时才会被当作文件列表，避免误判工具栏与命令行。
+- 命令行组合框的文本不写入 USER32 缓存，跨进程 `GetWindowText`/`SetWindowText` 读不到也改不了它。读取和清空都改用带超时的 `WM_GETTEXT`/`WM_SETTEXT` 消息，超时或投递失败时回退到旧的窗口文本 API，目标进程无响应时不会卡住 Lertaro。
+
 ## 构建
 
 需要 .NET 10 SDK。最稳妥的方式是使用官方 Lertaro 源码中的 `PluginSdk`：
@@ -73,6 +78,8 @@ Lertaro 官方开发指南约定第三方插件放在 App 根目录下的 `Plugi
 ```powershell
 dotnet run --project .\tests\DoubleCommander.Heuristics.Tests.csproj
 ```
+
+自检覆盖进程名、主窗口类名、文件列表类名（含 LCL 通用 `Window` 类）、路径文本与省略号路径等纯规则。
 
 真正的集成验收仍需要在本机启动 Double Commander，分别测试：普通路径、UNC 路径、中文路径、左右面板切换、标签页、管理员启动、映射盘和超长路径。若 Double Commander 命令行被隐藏、命令行中已有文字，或窗口不在前台，插件会放弃该次局部路径读取，避免打断用户输入。
 

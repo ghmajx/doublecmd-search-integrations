@@ -21,6 +21,11 @@ internal static class DoubleCommanderNativeMethods
     private const uint GaRoot = 2;
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint KeyEventKeyUp = 0x0002;
+    private const uint WmSetText = 0x000C;
+    private const uint WmGetText = 0x000D;
+    private const uint SmtoBlock = 0x0001;
+    private const uint SmtoAbortIfHung = 0x0002;
+    private const uint TextMessageTimeoutMs = 150;
     private const byte VirtualKeyControl = 0x11;
     private const byte VirtualKeyP = 0x50;
 
@@ -67,6 +72,26 @@ internal static class DoubleCommanderNativeMethods
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool SetWindowText(IntPtr hwnd, string text);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr SendMessageTimeout(
+        IntPtr hwnd,
+        uint message,
+        IntPtr wParam,
+        StringBuilder lParam,
+        uint flags,
+        uint timeout,
+        out IntPtr result);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr SendMessageTimeout(
+        IntPtr hwnd,
+        uint message,
+        IntPtr wParam,
+        string lParam,
+        uint flags,
+        uint timeout,
+        out IntPtr result);
+
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
 
@@ -103,7 +128,22 @@ internal static class DoubleCommanderNativeMethods
         if (hwnd == IntPtr.Zero)
             return string.Empty;
 
+        // GetWindowText only returns the text USER32 caches for windows in other processes, and
+        // Lazarus/LCL controls (Double Commander's command line) never populate that cache. Send the
+        // real WM_GETTEXT message instead, with a timeout so a hung target cannot block the caller.
         var text = new StringBuilder(32768);
+        var delivered = SendMessageTimeout(
+            hwnd,
+            WmGetText,
+            (IntPtr)text.Capacity,
+            text,
+            SmtoAbortIfHung | SmtoBlock,
+            TextMessageTimeoutMs,
+            out _);
+        if (delivered != IntPtr.Zero)
+            return text.ToString();
+
+        _ = text.Clear();
         _ = GetWindowText(hwnd, text, text.Capacity);
         return text.ToString();
     }
@@ -135,7 +175,25 @@ internal static class DoubleCommanderNativeMethods
         => hwnd != IntPtr.Zero && GetForegroundWindow() == hwnd;
 
     public static bool SetWindowTextValue(IntPtr hwnd, string text)
-        => hwnd != IntPtr.Zero && SetWindowText(hwnd, text);
+    {
+        if (hwnd == IntPtr.Zero)
+            return false;
+
+        // SetWindowText does not reach a control that belongs to another process (it only updates the
+        // USER32 cache), so LCL controls keep their old content. WM_SETTEXT is delivered properly.
+        var delivered = SendMessageTimeout(
+            hwnd,
+            WmSetText,
+            IntPtr.Zero,
+            text,
+            SmtoAbortIfHung | SmtoBlock,
+            TextMessageTimeoutMs,
+            out var result);
+        if (delivered != IntPtr.Zero)
+            return result != IntPtr.Zero;
+
+        return SetWindowText(hwnd, text);
+    }
 
     public static void SendControlP()
     {

@@ -19,9 +19,31 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
             && DoubleCommanderPathHeuristics.IsMainWindowClass(className);
 
     public bool CanTrigger(IntPtr focusedHwnd, string className)
-        => focusedHwnd != IntPtr.Zero
-            && DoubleCommanderPathHeuristics.IsFileListClass(className)
-            && !DoubleCommanderPathHeuristics.IsEditorClass(className);
+    {
+        if (focusedHwnd == IntPtr.Zero
+            || DoubleCommanderPathHeuristics.IsEditorClass(className))
+        {
+            return false;
+        }
+
+        if (DoubleCommanderPathHeuristics.IsFileListClass(className))
+            return true;
+
+        if (!DoubleCommanderPathHeuristics.IsGenericLclListHostClass(className))
+            return false;
+
+        // The generic LCL window class is shared by many controls, so only accept it when the window
+        // belongs to a Double Commander main window and is large enough to be a file panel.
+        var root = DoubleCommanderNativeMethods.GetRootWindow(focusedHwnd);
+        return root != IntPtr.Zero
+            && DoubleCommanderPathHeuristics.IsMainWindowClass(
+                DoubleCommanderNativeMethods.GetClassNameValue(root))
+            && DoubleCommanderPathHeuristics.IsDoubleCommanderProcess(
+                DoubleCommanderNativeMethods.GetProcessName(root))
+            && DoubleCommanderNativeMethods.TryGetWindowRect(focusedHwnd, out var bounds)
+            && bounds.Width >= 120
+            && bounds.Height >= 120;
+    }
 
     public string? GetSearchScope(IntPtr hwnd)
     {

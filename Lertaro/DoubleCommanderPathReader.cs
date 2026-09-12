@@ -99,8 +99,7 @@ internal static class DoubleCommanderPathReader
 
     private static string? TryQueryActivePathFromCommandLine(IntPtr mainWindow, IntPtr focusedControl)
     {
-        if (!DoubleCommanderPathHeuristics.IsFileListClass(
-                DoubleCommanderNativeMethods.GetClassNameValue(focusedControl))
+        if (!IsFilePanelFocus(mainWindow, focusedControl)
             || !DoubleCommanderNativeMethods.IsForegroundWindow(mainWindow))
         {
             return null;
@@ -146,6 +145,32 @@ internal static class DoubleCommanderPathReader
                 _ = DoubleCommanderNativeMethods.SetWindowTextValue(commandLine, string.Empty);
             }
         }
+    }
+
+    /// <summary>
+    /// True when the focused control can host a file panel. Lazarus builds expose the panels as
+    /// generic "Window" controls, so class names alone are not enough: for that class the window must
+    /// belong to the Double Commander main window and be large enough to be a panel rather than chrome.
+    /// </summary>
+    private static bool IsFilePanelFocus(IntPtr mainWindow, IntPtr focusedControl)
+    {
+        if (focusedControl == IntPtr.Zero)
+            return false;
+
+        var className = DoubleCommanderNativeMethods.GetClassNameValue(focusedControl);
+        if (DoubleCommanderPathHeuristics.IsEditorClass(className))
+            return false;
+
+        if (DoubleCommanderPathHeuristics.IsFileListClass(className))
+            return true;
+
+        if (!DoubleCommanderPathHeuristics.IsGenericLclListHostClass(className))
+            return false;
+
+        return DoubleCommanderNativeMethods.GetRootWindow(focusedControl) == mainWindow
+            && DoubleCommanderNativeMethods.TryGetWindowRect(focusedControl, out var bounds)
+            && bounds.Width >= 120
+            && bounds.Height >= 120;
     }
 
     private static IntPtr FindCommandLine(IntPtr mainWindow)

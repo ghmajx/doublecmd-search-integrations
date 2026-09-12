@@ -37,6 +37,26 @@ public static class DoubleCommanderPathHeuristics
             || className.Contains("TCustomGrid", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Lazarus/LCL builds expose the file panels as plain "Window" controls instead of a dedicated
+    /// list class (Double Commander 1.2 does this), so name-based rules must accept that class too.
+    /// Callers that have window handles must additionally verify the owning process and window.
+    /// </summary>
+    public static bool IsGenericLclListHostClass(string? className)
+    {
+        if (string.IsNullOrWhiteSpace(className))
+            return false;
+
+        return className.Equals("Window", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Name-only check for a control that can host a Double Commander file list. It is deliberately
+    /// fuzzy; window-handle based callers verify the host window before trusting the result.
+    /// </summary>
+    public static bool IsListHostClass(string? className)
+        => IsFileListClass(className) || IsGenericLclListHostClass(className);
+
     public static bool IsEditorClass(string? className)
     {
         if (string.IsNullOrWhiteSpace(className))

@@ -80,6 +80,8 @@ dotnet run --project .\tests\DoubleCommander.Heuristics.Tests.csproj
 
 推送 `v*` 标签会自动运行 Windows/.NET 10 构建，并创建 GitHub Release。Release 会附带单独的 DLL，以及包含以下内容的 ZIP：
 
+标签的 `v` 前缀不会写入 DLL；例如 `v0.1.2` 会生成 `FileVersion=0.1.2.0`、`ProductVersion=0.1.2`。发布流程会在打包前校验这两个版本号。
+
 ```text
 Lertaro.Plugins.DoubleCommander.dll
 Listary\DoubleCommander.Listary.ps1
@@ -88,8 +90,8 @@ LICENSE
 ```
 
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 ## Listary 集成边界

@@ -8,6 +8,10 @@
     <AssemblyName>Lertaro.Plugins.DoubleCommander</AssemblyName>
     <RootNamespace>Lertaro.Plugins.DoubleCommander</RootNamespace>
     <Version>0.1.0</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <GenerateDependencyFile>false</GenerateDependencyFile>
     <LertaroRoot Condition="'$(LertaroRoot)' == ''">$(MSBuildProjectDirectory)\..\..\Lertaro</LertaroRoot>
     <LertaroProject>$(LertaroRoot)\PluginSdk\PluginSdk.csproj</LertaroProject>

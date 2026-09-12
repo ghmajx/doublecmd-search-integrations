@@ -33,10 +33,18 @@ jobs:
 
       - name: Build Lertaro plugin
         shell: pwsh
-        run: >-
-          dotnet build .\Lertaro\DoubleCommander.csproj
-          --configuration Release
-          -p:LertaroRoot="${{ github.workspace }}\LertaroSdk"
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Release tag must have the form v<major>.<minor>.<patch>; got $env:GITHUB_REF_NAME"
+          }
+          $buildArgs = @(
+            '.\Lertaro\DoubleCommander.csproj'
+            '--configuration', 'Release'
+            "-p:LertaroRoot=$env:GITHUB_WORKSPACE\LertaroSdk"
+            "-p:Version=$version"
+          )
+          dotnet build @buildArgs
 
       - name: Package release files
         shell: pwsh
@@ -45,6 +53,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
           $dll = Join-Path $env:GITHUB_WORKSPACE 'Lertaro\bin\Release\net10.0-windows\Lertaro.Plugins.DoubleCommander.dll'
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $expectedFileVersion = "$version.0"
+          $fileInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($dll)
+          if ($fileInfo.FileVersion -ne $expectedFileVersion -or $fileInfo.ProductVersion -ne $version) {
+            throw "DLL version mismatch: expected FileVersion=$expectedFileVersion and ProductVersion=$version; got FileVersion=$($fileInfo.FileVersion), ProductVersion=$($fileInfo.ProductVersion)"
+          }
+          Write-Output "Verified DLL version: FileVersion=$($fileInfo.FileVersion), ProductVersion=$($fileInfo.ProductVersion)"
           Copy-Item $dll $dist -Force
           Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'README.md') $dist -Force
           Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'LICENSE') $dist -Force

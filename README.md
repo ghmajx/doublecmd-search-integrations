@@ -41,7 +41,7 @@ dotnet build .\Lertaro\DoubleCommander.csproj -c Release -p:LertaroSdkDll="C:\pa
 
 ### 安装 Lertaro 插件
 
-1. 从 GitHub Release 下载 `Lertaro.Plugins.DoubleCommander.dll`，或者下载包含 DLL、README 和 LICENSE 的 ZIP。
+1. 从 GitHub Release 下载 `Lertaro.Plugins.DoubleCommander.dll`，或者下载包含 DLL、Listary 桥接脚本、README 和 LICENSE 的 ZIP。
 2. 在 Lertaro **App 根目录**下创建目录：
 
    ```text
@@ -78,7 +78,14 @@ dotnet run --project .\tests\DoubleCommander.Heuristics.Tests.csproj
 
 ## 发布
 
-推送 `v*` 标签会自动运行 Windows/.NET 10 构建，并创建 GitHub Release，附带 DLL 和 ZIP：
+推送 `v*` 标签会自动运行 Windows/.NET 10 构建，并创建 GitHub Release。Release 会附带单独的 DLL，以及包含以下内容的 ZIP：
+
+```text
+Lertaro.Plugins.DoubleCommander.dll
+Listary\DoubleCommander.Listary.ps1
+README.md
+LICENSE
+```
 
 ```powershell
 git tag v0.1.0

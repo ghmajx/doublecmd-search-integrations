@@ -28,7 +28,10 @@ internal static class DoubleCommanderLauncher
 
         // -C activates the existing instance. -P keeps a result in the pane where the user invoked
         // Lertaro; Double Commander documents that a full filename opens its parent and selects it.
+        // -T routes the path through Double Commander's AddTab(), so the result does not take over the
+        // tab the user is working in (without it DC reuses the active tab's directory).
         startInfo.ArgumentList.Add("-C");
+        startInfo.ArgumentList.Add("-T");
         startInfo.ArgumentList.Add("-P");
         startInfo.ArgumentList.Add(IsLeftPanel(mainWindow, windowHwnd) ? "L" : "R");
         startInfo.ArgumentList.Add(path);

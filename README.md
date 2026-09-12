@@ -21,6 +21,7 @@ Lazarus/LCL 还有两个必须绕开的行为，插件已按此实现：
 - 命令行组合框的文本不写入 USER32 缓存，跨进程 `GetWindowText`/`SetWindowText` 读不到也改不了它。读取和清空都改用带超时的 `WM_GETTEXT`/`WM_SETTEXT` 消息，超时或投递失败时回退到旧的窗口文本 API，目标进程无响应时不会卡住 Lertaro。
 - 触发 `cm_AddPathToCmdLine` 不使用 `keybd_event`/`SendInput`：那类 API 会把快捷键注入**当前前台窗口**，实测在焦点切换的竞态下会泄漏到浏览器（弹出打印对话框）或在别的输入框留下裸 `p`。改为把 `WM_KEYDOWN`/`WM_KEYUP` 直接发给 Double Commander 的目标窗口，并用 `AttachThreadInput` + `SetKeyboardState` 让该线程的 `GetKeyState` 认为 Ctrl 处于按下状态，消息只可能被 Double Commander 收到。
 - 内联搜索窗的停靠矩形按优先级取：Lertaro 传入的窗口句柄（键盘钩子会把唤起时的焦点面板作为活动窗口广播出来，用 Tab 切换面板后依然准确）→ 当前焦点面板 → 鼠标所在的面板（摆放窗口时焦点已经移到搜索窗上，Double Commander 的线程不再报告焦点控件，而此时鼠标通常仍在该面板上）→ 整个窗口矩形。
+- 结果跳转使用 `doublecmd.exe -C -T -P <L|R> <路径>`：`-T` 让 Double Commander 走 `AddTab()`，结果在新标签页中打开，不会占用用户正在使用的标签页；`-P` 保证新标签出现在呼出搜索的那个面板里。
 - Lertaro 的 Hook 进程会在前台窗口每次变化时查询一次活动路径，所以这次临时读取必须完全不可见：查询期间暂停命令行控件的重绘，读到的路径在清空后还会复核一次并重试，避免 Double Commander 稍后写入的文本留在输入框里。`Ctrl+P` 只发送一次（该命令是追加写入），随后最多读三次、每次间隔 25ms，读到路径即返回；仍然读不到时回退到该面板最近一次成功读取的路径（10 分钟内有效），而不是返回空值让 Lertaro 丢掉已有搜索范围。同一面板 500ms 内的重复请求直接命中缓存，不会重复注入。
 
 ## 构建

@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>Lertaro.Plugins.DoubleCommander</AssemblyName>
+    <RootNamespace>Lertaro.Plugins.DoubleCommander</RootNamespace>
+    <Version>0.1.0</Version>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <LertaroRoot Condition="'$(LertaroRoot)' == ''">$(MSBuildProjectDirectory)\..\..\Lertaro</LertaroRoot>
+    <LertaroProject>$(LertaroRoot)\PluginSdk\PluginSdk.csproj</LertaroProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(LertaroProject)')">
+    <ProjectReference Include="$(LertaroProject)" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="!Exists('$(LertaroProject)') and '$(LertaroSdkDll)' != ''">
+    <Reference Include="Lertaro.PluginSdk">
+      <HintPath>$(LertaroSdkDll)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="ValidateLertaroSdk" BeforeTargets="ResolveReferences">
+    <Error
+      Condition="!Exists('$(LertaroProject)') and '$(LertaroSdkDll)' == ''"
+      Text="找不到 Lertaro.PluginSdk。请使用 -p:LertaroRoot=官方 Lertaro 源码目录，或使用 -p:LertaroSdkDll=已安装的 Lertaro.PluginSdk.dll。" />
+  </Target>
+
+  <Target Name="CopyToLertaro" AfterTargets="Build" Condition="Exists('$(LertaroRoot)')">
+    <PropertyGroup>
+      <LertaroPluginDirectory>$(LertaroRoot)\App\bin\$(Configuration)\net10.0-windows\Plugins\DoubleCommander</LertaroPluginDirectory>
+    </PropertyGroup>
+    <MakeDir Directories="$(LertaroPluginDirectory)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(LertaroPluginDirectory)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

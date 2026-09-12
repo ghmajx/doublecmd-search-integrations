@@ -11,7 +11,9 @@ internal static class DoubleCommanderPathReader
 {
     private static readonly object CommandLineQueryLock = new();
     private static readonly Dictionary<IntPtr, (DateTimeOffset Timestamp, IntPtr FocusedControl, string Path)> CommandLinePathCache = new();
+    private static readonly Dictionary<IntPtr, (DateTimeOffset Timestamp, IntPtr FocusedControl, string Path)> LastKnownPathCache = new();
     private static readonly TimeSpan CommandLinePathCacheLifetime = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan LastKnownPathLifetime = TimeSpan.FromSeconds(10);
 
     public static string? FindActivePath(IntPtr mainWindow, IntPtr focusedControl)
     {
@@ -132,27 +134,25 @@ internal static class DoubleCommanderPathReader
             var redrawSuspended = DoubleCommanderNativeMethods.SetWindowRedraw(commandLine, false);
             try
             {
-                DoubleCommanderNativeMethods.SendControlP();
-
-                // Double Commander applies the command asynchronously, so poll briefly instead of
-                // reading once: a single short read used to come back empty and made the caller drop
-                // the scope it already had.
-                var path = string.Empty;
-                var deadline = Environment.TickCount64 + 150;
-                while (Environment.TickCount64 <= deadline)
+                var path = ReadCommandLinePath(commandLine);
+                if (path is not null)
                 {
-                    Thread.Sleep(15);
-                    path = DoubleCommanderPathHeuristics.UnquotePathText(
-                        DoubleCommanderNativeMethods.GetWindowTextValue(commandLine));
-                    if (DoubleCommanderPathHeuristics.LooksLikeWindowsPath(path))
-                        break;
+                    CommandLinePathCache[mainWindow] = (now, focusedControl, path);
+                    LastKnownPathCache[mainWindow] = (now, focusedControl, path);
+                    return path;
                 }
 
-                if (!DoubleCommanderPathHeuristics.LooksLikeWindowsPath(path))
-                    return null;
+                // Double Commander applies the command asynchronously, so a read can come back empty even
+                // though the pane did not change. Report the pane's last known path instead of "no path":
+                // a null answer makes Lertaro drop the search scope it already had.
+                if (LastKnownPathCache.TryGetValue(mainWindow, out var last)
+                    && last.FocusedControl == focusedControl
+                    && now - last.Timestamp < LastKnownPathLifetime)
+                {
+                    return last.Path;
+                }
 
-                CommandLinePathCache[mainWindow] = (DateTimeOffset.UtcNow, focusedControl, path);
-                return path;
+                return null;
             }
             finally
             {
@@ -164,6 +164,27 @@ internal static class DoubleCommanderPathReader
                     _ = DoubleCommanderNativeMethods.SetWindowRedraw(commandLine, true);
             }
         }
+    }
+
+    /// <summary>
+    /// Sends Ctrl+P once and reads the command line back a few times: the hotkey is handled
+    /// asynchronously by Double Commander, so the first read can still see an empty field. The command
+    /// must not be sent twice -- it <em>appends</em> to the command line and would duplicate the path.
+    /// </summary>
+    private static string? ReadCommandLinePath(IntPtr commandLine)
+    {
+        DoubleCommanderNativeMethods.SendControlP();
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            Thread.Sleep(25);
+            var path = DoubleCommanderPathHeuristics.UnquotePathText(
+                DoubleCommanderNativeMethods.GetWindowTextValue(commandLine));
+            if (DoubleCommanderPathHeuristics.LooksLikeWindowsPath(path))
+                return path;
+        }
+
+        return null;
     }
 
     /// <summary>

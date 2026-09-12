@@ -10,7 +10,7 @@
     <!-- Fallback only: builds derive the version from the newest v* git tag (see SetVersionFromGitTag),
          and a release can override it with -p:Version=<tag>. Keep this value equal to the latest released
          tag; the Build workflow fails when it falls behind. -->
-    <Version>0.1.15</Version>
+    <Version>9.9.9</Version>
     <AssemblyVersion>$(Version).0</AssemblyVersion>
     <FileVersion>$(Version).0</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>

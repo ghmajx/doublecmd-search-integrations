@@ -258,12 +258,52 @@ internal static class DoubleCommanderNativeMethods
         if (IsPanelControl(mainWindow, requestedHwnd))
             return requestedHwnd;
 
+        // While Double Commander still has the focus this is the exact panel; afterwards (the inline window
+        // has taken it) the thread reports no focus at all and the recorded panel takes over. Note that a
+        // panel is resolved even when the focus currently sits in an editor such as the command line: the
+        // command line round trip only ever runs with that field empty and restores the empty field, so the
+        // user's own input is never at risk.
         var focused = GetFocusedControl(mainWindow);
         if (IsPanelControl(mainWindow, focused))
             return focused;
 
         var published = GetPublishedActivePanel(mainWindow);
-        return IsPanelControl(mainWindow, published) ? published : IntPtr.Zero;
+        if (IsPanelControl(mainWindow, published))
+            return published;
+
+        // Last resort: the panel under the mouse cursor, preferring the innermost control that contains it
+        // so a container spanning both panels is never picked. Covers the case where a result is opened
+        // long after the panel was last recorded.
+        return TryGetPanelUnderCursor(mainWindow, out var panel) ? panel : IntPtr.Zero;
+    }
+
+    public static bool TryGetPanelUnderCursor(IntPtr mainWindow, out IntPtr panel)
+    {
+        panel = IntPtr.Zero;
+        if (mainWindow == IntPtr.Zero || !TryGetCursorPosition(out var cursorX, out var cursorY))
+            return false;
+
+        var found = false;
+        var bestArea = long.MaxValue;
+        foreach (var child in EnumerateChildWindows(mainWindow))
+        {
+            if (!IsPanelControl(mainWindow, child)
+                || !TryGetWindowRect(child, out var bounds)
+                || !bounds.Contains(cursorX, cursorY))
+            {
+                continue;
+            }
+
+            var area = (long)bounds.Width * bounds.Height;
+            if (!found || area < bestArea)
+            {
+                found = true;
+                bestArea = area;
+                panel = child;
+            }
+        }
+
+        return found;
     }
 
     public static bool IsPanelControl(IntPtr mainWindow, IntPtr control)

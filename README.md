@@ -23,6 +23,7 @@ Lazarus/LCL 还有两个必须绕开的行为，插件已按此实现：
 - 内联搜索窗的停靠矩形按优先级取：Lertaro 传入的窗口句柄（键盘钩子会把唤起时的焦点面板作为活动窗口广播出来，用 Tab 切换面板后依然准确）→ 当前焦点面板 → 最近发布的活动面板 → 鼠标所在的面板（摆放窗口时焦点已经移到搜索窗上，Double Commander 的线程不再报告焦点控件，而此时鼠标通常仍在该面板上）→ 整个窗口矩形。
 - 结果跳转使用 `doublecmd.exe -C -T -P <L|R> <路径>`：`-T` 让 Double Commander 走 `AddTab()`，结果在新标签页中打开，不会占用用户正在使用的标签页；`-P` 保证新标签出现在呼出搜索的那个面板里。
 - Lertaro 的 Hook 进程会在前台窗口每次变化时查询一次活动路径，所以这次临时读取必须完全不可见：查询期间暂停命令行控件的重绘，读到的路径在清空后还会复核一次并重试，避免 Double Commander 稍后写入的文本留在输入框里。`Ctrl+P` 只发送一次（该命令是追加写入），随后最多读三次、每次间隔 25ms，读到路径即返回；仍然读不到时回退到该面板最近一次成功读取的路径（10 秒内有效），而不是返回空值让 Lertaro 丢掉已有搜索范围。同一面板 500ms 内的重复请求直接命中缓存，不会重复注入。
+- 进程名只识别 `doublecmd` 与 `doublecmd64`（前者同时用于 32/64 位官方构建）。如果发行版把可执行文件改名（例如 `doublecmd_gui.exe`），插件不会把它当成 Double Commander。
 
 ## 构建
 
@@ -92,6 +93,8 @@ dotnet run --project .\tests\DoubleCommander.Heuristics.Tests.csproj
 推送 `v*` 标签会自动运行 Windows/.NET 10 构建，并创建 GitHub Release。Release 会附带单独的 DLL，以及包含以下内容的 ZIP：
 
 标签的 `v` 前缀不会写入 DLL；例如 `v0.1.2` 会生成 `FileVersion=0.1.2.0`、`ProductVersion=0.1.2`。发布流程会在打包前校验这两个版本号。
+
+`Lertaro/DoubleCommander.csproj` 里的 `<Version>` 是普通构建（`Build and test` 工作流、本地 `dotnet build`）使用的默认值：发布时由 `-p:Version=<标签>` 覆盖，但发版后仍应把它同步成最新标签号，避免 Build 产物版本与标签不一致。
 
 ```text
 Lertaro.Plugins.DoubleCommander.dll

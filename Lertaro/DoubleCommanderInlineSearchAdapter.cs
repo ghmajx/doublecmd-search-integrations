@@ -66,16 +66,11 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
             && bounds.Height >= 120;
     }
 
+    // Same question inline search asks for its keyboard trigger ("is the user over a file list?"), so the
+    // SDK default is the right answer here too. CanRecognizeHost would be too broad: it also accepts the
+    // command line and other controls of the main window, which must not open the quick navigation menu.
     public bool CanShowQuickNav(IntPtr hwndUnderCursor, string classNameUnderCursor)
-    {
-        if (hwndUnderCursor == IntPtr.Zero)
-            return false;
-
-        return CanRecognizeHost(
-            hwndUnderCursor,
-            classNameUnderCursor,
-            DoubleCommanderNativeMethods.GetProcessName(hwndUnderCursor));
-    }
+        => CanTrigger(hwndUnderCursor, classNameUnderCursor);
 
     public string? GetSearchScope(IntPtr hwnd)
     {
@@ -175,9 +170,10 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
 
         // Positioning normally happens after the inline window took the focus, and an inactive thread
         // reports no focused control at all, so the panel is resolved from the mouse cursor: the inline
-        // search is summoned by typing over a panel, where the cursor still is. Picking the *innermost*
-        // control containing the cursor avoids anchoring to a container of both panels.
-        if (TryResolvePanelUnderCursor(mainWindow, out bounds))
+        // search is summoned by typing over a panel, where the cursor still is. The helper picks the
+        // innermost control containing the cursor, so a container of both panels is never anchored to.
+        if (DoubleCommanderNativeMethods.TryGetPanelUnderCursor(mainWindow, out var cursorPanel)
+            && DoubleCommanderNativeMethods.TryGetWindowRect(cursorPanel, out bounds))
         {
             source = "cursor";
             return true;
@@ -192,35 +188,6 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         source = string.Empty;
         bounds = default;
         return false;
-    }
-
-    private static bool TryResolvePanelUnderCursor(IntPtr mainWindow, out NativeRect bounds)
-    {
-        bounds = default;
-        if (!DoubleCommanderNativeMethods.TryGetCursorPosition(out var cursorX, out var cursorY))
-            return false;
-
-        var found = false;
-        var best = default(NativeRect);
-        foreach (var child in DoubleCommanderNativeMethods.EnumerateChildWindows(mainWindow))
-        {
-            if (!DoubleCommanderNativeMethods.IsPanelControl(mainWindow, child)
-                || !DoubleCommanderNativeMethods.TryGetWindowRect(child, out var candidate)
-                || !candidate.Contains(cursorX, cursorY))
-            {
-                continue;
-            }
-
-            // Innermost wins: containers of both panels contain the cursor as well, but they are larger.
-            if (!found || candidate.Width * candidate.Height < best.Width * best.Height)
-            {
-                best = candidate;
-                found = true;
-            }
-        }
-
-        bounds = best;
-        return found;
     }
 
     private static string DescribeRect(IntPtr hwnd)

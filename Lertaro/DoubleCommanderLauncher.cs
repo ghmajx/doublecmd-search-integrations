@@ -24,9 +24,12 @@ internal static class DoubleCommanderLauncher
             return false;
         }
 
-        var panel = DoubleCommanderNativeMethods.ResolveKnownPanel(mainWindow, windowHwnd);
-        if (panel == IntPtr.Zero)
-            return false;
+        // Prefer the panel that could actually be resolved. When none is known -- for example the click
+        // arrives long after the panel was last recorded -- fall back to the handle Lertaro passed (usually
+        // the panel that had focus, otherwise the main window) so opening a result still works instead of
+        // silently doing nothing.
+        var resolvedPanel = DoubleCommanderNativeMethods.ResolveKnownPanel(mainWindow, windowHwnd);
+        var targetPanel = resolvedPanel != IntPtr.Zero ? resolvedPanel : windowHwnd;
 
         var executable = DoubleCommanderNativeMethods.GetProcessImagePath(mainWindow);
         if (string.IsNullOrWhiteSpace(executable))
@@ -46,7 +49,7 @@ internal static class DoubleCommanderLauncher
         startInfo.ArgumentList.Add("-C");
         startInfo.ArgumentList.Add("-T");
         startInfo.ArgumentList.Add("-P");
-        startInfo.ArgumentList.Add(IsLeftPanel(mainWindow, panel) ? "L" : "R");
+        startInfo.ArgumentList.Add(IsLeftPanel(mainWindow, targetPanel) ? "L" : "R");
         startInfo.ArgumentList.Add(path);
 
         try

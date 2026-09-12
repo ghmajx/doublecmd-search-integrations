@@ -18,7 +18,11 @@
   </PropertyGroup>
 
   <ItemGroup Condition="Exists('$(LertaroProject)')">
-    <ProjectReference Include="$(LertaroProject)" Private="false" />
+    <!-- Release builds pass -p:Version=<tag>; without this the value flows into the referenced SDK
+         project and the plugin ends up referencing e.g. Lertaro.PluginSdk 0.1.4 instead of the
+         installed 1.8.6. Keep the SDK's own versioning. -->
+    <ProjectReference Include="$(LertaroProject)" Private="false"
+                      GlobalPropertiesToRemove="Version;AssemblyVersion;FileVersion;InformationalVersion;VersionPrefix;VersionSuffix" />
   </ItemGroup>
 
   <ItemGroup Condition="!Exists('$(LertaroProject)') and '$(LertaroSdkDll)' != ''">

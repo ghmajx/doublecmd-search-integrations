@@ -133,9 +133,21 @@ internal static class DoubleCommanderPathReader
             try
             {
                 DoubleCommanderNativeMethods.SendControlP();
-                Thread.Sleep(35);
-                var path = DoubleCommanderPathHeuristics.UnquotePathText(
-                    DoubleCommanderNativeMethods.GetWindowTextValue(commandLine));
+
+                // Double Commander applies the command asynchronously, so poll briefly instead of
+                // reading once: a single short read used to come back empty and made the caller drop
+                // the scope it already had.
+                var path = string.Empty;
+                var deadline = Environment.TickCount64 + 150;
+                while (Environment.TickCount64 <= deadline)
+                {
+                    Thread.Sleep(15);
+                    path = DoubleCommanderPathHeuristics.UnquotePathText(
+                        DoubleCommanderNativeMethods.GetWindowTextValue(commandLine));
+                    if (DoubleCommanderPathHeuristics.LooksLikeWindowsPath(path))
+                        break;
+                }
+
                 if (!DoubleCommanderPathHeuristics.LooksLikeWindowsPath(path))
                     return null;
 
@@ -179,6 +191,10 @@ internal static class DoubleCommanderPathReader
         var className = DoubleCommanderNativeMethods.GetClassNameValue(focusedControl);
         if (DoubleCommanderPathHeuristics.IsEditorClass(className))
             return false;
+
+        // The caller falls back to the main window when it cannot resolve the focused control.
+        if (DoubleCommanderPathHeuristics.IsMainWindowClass(className))
+            return true;
 
         if (DoubleCommanderPathHeuristics.IsFileListClass(className))
             return true;

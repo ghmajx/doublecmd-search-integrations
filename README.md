@@ -94,7 +94,7 @@ dotnet run --project .\tests\DoubleCommander.Heuristics.Tests.csproj
 
 标签的 `v` 前缀不会写入 DLL；例如 `v0.1.2` 会生成 `FileVersion=0.1.2.0`、`ProductVersion=0.1.2`。发布流程会在打包前校验这两个版本号。
 
-`Lertaro/DoubleCommander.csproj` 里的 `<Version>` 是普通构建（`Build and test` 工作流、本地 `dotnet build`）使用的默认值：发布时由 `-p:Version=<标签>` 覆盖，但发版后仍应把它同步成最新标签号，避免 Build 产物版本与标签不一致。
+版本号以 **git 标签**为准：构建时会执行 `git describe --tags --match "v*" --abbrev=0` 推导出 `Version`（以及 `AssemblyVersion`/`FileVersion`/`InformationalVersion`），所以 CI 产物、本地构建与发布产物报出的版本一致。发布时 `-p:Version=<标签>` 依然优先（全局属性，覆盖推导值）。`Lertaro/DoubleCommander.csproj` 里的 `<Version>` 只是**回退值**：没有 git、没有标签（源码导出、浅克隆）时才会用到；`Build and test` 工作流会检查它是否落后于最新标签（落后即失败），领先（正在准备下一个版本）则只提示。
 
 ```text
 Lertaro.Plugins.DoubleCommander.dll
@@ -107,6 +107,8 @@ LICENSE
 git tag v0.1.2
 git push origin v0.1.2
 ```
+
+发版前把 `Lertaro/DoubleCommander.csproj` 的 `<Version>` 改成与标签相同的值（Release 工作流会校验两者一致，不一致会直接失败），这样在无 git 环境里构建也能得到正确版本。
 
 ## Listary 集成边界
 

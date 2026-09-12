@@ -15,8 +15,24 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         => CanRecognizeHost(hwnd, className, processName);
 
     public bool CanRecognizeHost(IntPtr hwnd, string className, string processName)
-        => DoubleCommanderPathHeuristics.IsDoubleCommanderProcess(processName)
-            && DoubleCommanderPathHeuristics.IsMainWindowClass(className);
+    {
+        if (!DoubleCommanderPathHeuristics.IsDoubleCommanderProcess(processName))
+            return false;
+
+        if (DoubleCommanderPathHeuristics.IsMainWindowClass(className))
+            return true;
+
+        // Lertaro resolves the host from the focused control as well (its keyboard hook matches the
+        // adapter against the focused control's class), so a file panel whose root window is a Double
+        // Commander main window must count as the host. Without this the hotkey falls back to the plain
+        // floating search window instead of the docked inline search window.
+        var root = DoubleCommanderNativeMethods.GetRootWindow(hwnd);
+        return root != IntPtr.Zero
+            && DoubleCommanderPathHeuristics.IsMainWindowClass(
+                DoubleCommanderNativeMethods.GetClassNameValue(root))
+            && DoubleCommanderPathHeuristics.IsDoubleCommanderProcess(
+                DoubleCommanderNativeMethods.GetProcessName(root));
+    }
 
     public bool CanTrigger(IntPtr focusedHwnd, string className)
     {

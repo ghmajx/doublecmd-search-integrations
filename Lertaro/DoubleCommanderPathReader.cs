@@ -10,7 +10,7 @@ internal readonly record struct DoubleCommanderPathCandidate(
 internal static class DoubleCommanderPathReader
 {
     private static readonly object CommandLineQueryLock = new();
-    private static readonly Dictionary<IntPtr, (DateTimeOffset Timestamp, string Path)> CommandLinePathCache = new();
+    private static readonly Dictionary<IntPtr, (DateTimeOffset Timestamp, IntPtr FocusedControl, string Path)> CommandLinePathCache = new();
     private static readonly TimeSpan CommandLinePathCacheLifetime = TimeSpan.FromMilliseconds(500);
 
     public static string? FindActivePath(IntPtr mainWindow, IntPtr focusedControl)
@@ -116,6 +116,7 @@ internal static class DoubleCommanderPathReader
         {
             var now = DateTimeOffset.UtcNow;
             if (CommandLinePathCache.TryGetValue(mainWindow, out var cached)
+                && cached.FocusedControl == focusedControl
                 && now - cached.Timestamp < CommandLinePathCacheLifetime)
             {
                 return cached.Path;
@@ -125,6 +126,10 @@ internal static class DoubleCommanderPathReader
             if (!string.IsNullOrWhiteSpace(DoubleCommanderNativeMethods.GetWindowTextValue(commandLine)))
                 return null;
 
+            // The round trip temporarily writes the path into the command line. Painting of that
+            // control is suspended for the duration so the text is never visible on screen, which
+            // matters because callers may query the scope on every activation or pane switch.
+            var redrawSuspended = DoubleCommanderNativeMethods.SetWindowRedraw(commandLine, false);
             try
             {
                 DoubleCommanderNativeMethods.SendControlP();
@@ -134,7 +139,7 @@ internal static class DoubleCommanderPathReader
                 if (!DoubleCommanderPathHeuristics.LooksLikeWindowsPath(path))
                     return null;
 
-                CommandLinePathCache[mainWindow] = (DateTimeOffset.UtcNow, path);
+                CommandLinePathCache[mainWindow] = (DateTimeOffset.UtcNow, focusedControl, path);
                 return path;
             }
             finally
@@ -142,9 +147,23 @@ internal static class DoubleCommanderPathReader
                 // cm_AddPathToCmdLine appends to edtCommand. We entered only with an empty field,
                 // so restoring an empty field removes the temporary observation without deleting
                 // user input that existed before the query.
-                _ = DoubleCommanderNativeMethods.SetWindowTextValue(commandLine, string.Empty);
+                ClearCommandLine(commandLine);
+                if (redrawSuspended)
+                    _ = DoubleCommanderNativeMethods.SetWindowRedraw(commandLine, true);
             }
         }
+    }
+
+    /// <summary>
+    /// Double Commander can apply the path to the command line slightly after the read, so clear the
+    /// field, verify it, and retry once to make sure no temporary text is left behind.
+    /// </summary>
+    private static void ClearCommandLine(IntPtr commandLine)
+    {
+        _ = DoubleCommanderNativeMethods.SetWindowTextValue(commandLine, string.Empty);
+        Thread.Sleep(25);
+        if (!string.IsNullOrEmpty(DoubleCommanderNativeMethods.GetWindowTextValue(commandLine)))
+            _ = DoubleCommanderNativeMethods.SetWindowTextValue(commandLine, string.Empty);
     }
 
     /// <summary>

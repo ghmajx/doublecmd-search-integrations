@@ -21,6 +21,7 @@ internal static class DoubleCommanderNativeMethods
     private const uint GaRoot = 2;
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint KeyEventKeyUp = 0x0002;
+    private const uint WmSetRedraw = 0x000B;
     private const uint WmSetText = 0x000C;
     private const uint WmGetText = 0x000D;
     private const uint SmtoBlock = 0x0001;
@@ -91,6 +92,22 @@ internal static class DoubleCommanderNativeMethods
         uint flags,
         uint timeout,
         out IntPtr result);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr SendMessageTimeout(
+        IntPtr hwnd,
+        uint message,
+        IntPtr wParam,
+        IntPtr lParam,
+        uint flags,
+        uint timeout,
+        out IntPtr result);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool InvalidateRect(IntPtr hwnd, IntPtr rect, bool erase);
+
+    [DllImport("user32.dll")]
+    private static extern bool UpdateWindow(IntPtr hwnd);
 
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
@@ -193,6 +210,35 @@ internal static class DoubleCommanderNativeMethods
             return result != IntPtr.Zero;
 
         return SetWindowText(hwnd, text);
+    }
+
+    /// <summary>
+    /// Suspends or resumes painting of a window. Used to keep the temporary command line text of the
+    /// Ctrl+P query invisible; USER32 handles WM_SETREDRAW for any window, including LCL controls.
+    /// </summary>
+    public static bool SetWindowRedraw(IntPtr hwnd, bool enable)
+    {
+        if (hwnd == IntPtr.Zero)
+            return false;
+
+        var delivered = SendMessageTimeout(
+            hwnd,
+            WmSetRedraw,
+            enable ? new IntPtr(1) : IntPtr.Zero,
+            IntPtr.Zero,
+            SmtoAbortIfHung | SmtoBlock,
+            TextMessageTimeoutMs,
+            out _);
+        if (delivered == IntPtr.Zero)
+            return false;
+
+        if (enable)
+        {
+            _ = InvalidateRect(hwnd, IntPtr.Zero, true);
+            _ = UpdateWindow(hwnd);
+        }
+
+        return true;
     }
 
     public static void SendControlP()

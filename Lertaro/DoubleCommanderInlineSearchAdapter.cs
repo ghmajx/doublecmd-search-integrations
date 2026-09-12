@@ -113,6 +113,20 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
 
     private static bool TryResolveDockBounds(IntPtr mainWindow, IntPtr hwnd, out NativeRect bounds, out string source)
     {
+        if (Logger.LogAction is not null)
+        {
+            var focusedProbe = DoubleCommanderNativeMethods.GetFocusedControl(mainWindow);
+            var cursorProbe = DoubleCommanderNativeMethods.TryGetCursorPosition(out var px, out var py)
+                ? $"{px},{py}"
+                : "n/a";
+            DoubleCommanderNativeMethods.TryGetWindowRect(hwnd, out var handleRect);
+            Logger.Log(
+                $"[DoubleCommander] dock resolve: hwnd=0x{hwnd.ToInt64():X} class='{DoubleCommanderNativeMethods.GetClassNameValue(hwnd)}' rect={handleRect.Left},{handleRect.Top} {handleRect.Width}x{handleRect.Height}; "
+                + $"focus=0x{focusedProbe.ToInt64():X} class='{DoubleCommanderNativeMethods.GetClassNameValue(focusedProbe)}' rect={DescribeRect(focusedProbe)}; "
+                + $"cursor={cursorProbe}; foreground=0x{DoubleCommanderNativeMethods.GetForegroundWindowValue().ToInt64():X}",
+                LogLevel.Debug);
+        }
+
         // The panel that currently holds the focus, while Double Commander still has it.
         var focused = DoubleCommanderNativeMethods.GetFocusedControl(mainWindow);
         if (IsPanelControl(mainWindow, focused)
@@ -122,21 +136,22 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
             return true;
         }
 
-        // Drill down from the handle Lertaro passed. Its keyboard hook re-broadcasts the focused control
-        // as the active window, but that handle can also be a pane container or the window itself, so
-        // resolve it to the innermost file list instead of trusting its rectangle directly.
-        if (TryResolvePanel(mainWindow, hwnd, out bounds))
-        {
-            source = "handle";
-            return true;
-        }
-
         // Positioning normally happens after the inline window took the focus, and an inactive thread
-        // reports no focused control at all. Fall back to the panel under the mouse cursor: the inline
-        // search is summoned by typing over a panel, where the cursor usually still is.
+        // reports no focused control at all, so the panel is resolved from the mouse cursor: the inline
+        // search is summoned by typing over a panel, where the cursor still is. Picking the *innermost*
+        // control containing the cursor avoids anchoring to a container of both panels.
         if (TryResolvePanelUnderCursor(mainWindow, out bounds))
         {
             source = "cursor";
+            return true;
+        }
+
+        // Lertaro usually passes the main window, but its keyboard hook can also broadcast the focused
+        // panel; honour that when it really is one.
+        if (IsPanelControl(mainWindow, hwnd)
+            && DoubleCommanderNativeMethods.TryGetWindowRect(hwnd, out bounds))
+        {
+            source = "handle";
             return true;
         }
 
@@ -215,15 +230,17 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
 
         var found = false;
         var best = default(NativeRect);
-        foreach (var child in DoubleCommanderNativeMethods.EnumerateDirectChildren(mainWindow))
+        foreach (var child in DoubleCommanderNativeMethods.EnumerateChildWindows(mainWindow))
         {
-            if (!TryResolvePanel(mainWindow, child, out var candidate)
+            if (!IsPanelControl(mainWindow, child)
+                || !DoubleCommanderNativeMethods.TryGetWindowRect(child, out var candidate)
                 || !candidate.Contains(cursorX, cursorY))
             {
                 continue;
             }
 
-            if (!found || candidate.Width * candidate.Height > best.Width * best.Height)
+            // Innermost wins: containers of both panels contain the cursor as well, but they are larger.
+            if (!found || candidate.Width * candidate.Height < best.Width * best.Height)
             {
                 best = candidate;
                 found = true;
@@ -234,8 +251,15 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         return found;
     }
 
-    private static bool TryGetCursorInside(NativeRect rect)
-        => DoubleCommanderNativeMethods.TryGetCursorPosition(out var x, out var y) && rect.Contains(x, y);
+    private static string DescribeRect(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+            return "(zero)";
+
+        return DoubleCommanderNativeMethods.TryGetWindowRect(hwnd, out var rect)
+            ? $"{rect.Left},{rect.Top} {rect.Width}x{rect.Height}"
+            : "(no rect)";
+    }
 
     private static bool IsPanelControl(IntPtr mainWindow, IntPtr control)
     {

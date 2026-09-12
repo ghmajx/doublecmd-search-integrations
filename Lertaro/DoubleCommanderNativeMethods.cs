@@ -239,6 +239,8 @@ internal static class DoubleCommanderNativeMethods
     public static bool IsForegroundWindow(IntPtr hwnd)
         => hwnd != IntPtr.Zero && GetForegroundWindow() == hwnd;
 
+    public static IntPtr GetForegroundWindowValue() => GetForegroundWindow();
+
     public static bool SetWindowTextValue(IntPtr hwnd, string text)
     {
         if (hwnd == IntPtr.Zero)

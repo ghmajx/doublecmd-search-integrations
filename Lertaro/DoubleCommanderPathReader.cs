@@ -22,13 +22,17 @@ internal static class DoubleCommanderPathReader
         if (focusedControl != IntPtr.Zero
             && DoubleCommanderNativeMethods.TryGetWindowRect(focusedControl, out var focusedBounds))
         {
-            if (candidates.Count > 0)
+            if (DoubleCommanderNativeMethods.IsPanelControl(mainWindow, focusedControl))
             {
-                var candidate = candidates
-                    .OrderByDescending(item => ScoreForFocusedControl(item, focusedBounds))
-                    .First();
-                if (candidate.BaseScore >= 0)
-                    return candidate.Path;
+                DoubleCommanderNativeMethods.PublishActivePanel(mainWindow, focusedControl);
+                if (candidates.Count > 0)
+                {
+                    var candidate = candidates
+                        .OrderByDescending(item => ScoreForFocusedControl(item, focusedBounds))
+                        .First();
+                    if (ScoreForFocusedControl(candidate, focusedBounds) >= 0)
+                        return candidate.Path;
+                }
             }
 
             // TPathLabel is a Lazarus graphic control and may not have an HWND. In that case use
@@ -223,11 +227,7 @@ internal static class DoubleCommanderPathReader
             return true;
 
         var isPanel = DoubleCommanderPathHeuristics.IsFileListClass(className)
-            || (DoubleCommanderPathHeuristics.IsGenericLclListHostClass(className)
-                && DoubleCommanderNativeMethods.GetRootWindow(focusedControl) == mainWindow
-                && DoubleCommanderNativeMethods.TryGetWindowRect(focusedControl, out var bounds)
-                && bounds.Width >= 120
-                && bounds.Height >= 120);
+            || DoubleCommanderNativeMethods.IsPanelControl(mainWindow, focusedControl);
 
         // Remember the panel for the process that later positions the inline search window: by then Double
         // Commander has lost the focus and cannot be asked which panel was active (a Tab switch leaves no

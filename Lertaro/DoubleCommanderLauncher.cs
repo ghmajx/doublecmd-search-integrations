@@ -16,8 +16,21 @@ internal static class DoubleCommanderLauncher
         if (mainWindow == IntPtr.Zero)
             mainWindow = windowHwnd;
 
-        var executable = DoubleCommanderNativeMethods.GetProcessImagePath(mainWindow)
-            ?? "doublecmd.exe";
+        if (!DoubleCommanderPathHeuristics.IsMainWindowClass(
+                DoubleCommanderNativeMethods.GetClassNameValue(mainWindow))
+            || !DoubleCommanderPathHeuristics.IsDoubleCommanderProcess(
+                DoubleCommanderNativeMethods.GetProcessName(mainWindow)))
+        {
+            return false;
+        }
+
+        var panel = DoubleCommanderNativeMethods.ResolveKnownPanel(mainWindow, windowHwnd);
+        if (panel == IntPtr.Zero)
+            return false;
+
+        var executable = DoubleCommanderNativeMethods.GetProcessImagePath(mainWindow);
+        if (string.IsNullOrWhiteSpace(executable))
+            return false;
 
         var startInfo = new ProcessStartInfo
         {
@@ -33,7 +46,7 @@ internal static class DoubleCommanderLauncher
         startInfo.ArgumentList.Add("-C");
         startInfo.ArgumentList.Add("-T");
         startInfo.ArgumentList.Add("-P");
-        startInfo.ArgumentList.Add(IsLeftPanel(mainWindow, windowHwnd) ? "L" : "R");
+        startInfo.ArgumentList.Add(IsLeftPanel(mainWindow, panel) ? "L" : "R");
         startInfo.ArgumentList.Add(path);
 
         try

@@ -107,9 +107,6 @@ internal static class DoubleCommanderNativeMethods
         uint timeout,
         out IntPtr result);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr SendMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
-
     [DllImport("user32.dll", EntryPoint = "MapVirtualKeyW")]
     private static extern uint MapVirtualKey(uint code, uint mapType);
 
@@ -253,6 +250,40 @@ internal static class DoubleCommanderNativeMethods
     public static IntPtr GetPublishedActivePanel(IntPtr mainWindow)
         => mainWindow == IntPtr.Zero ? IntPtr.Zero : GetProp(mainWindow, ActivePanelPropertyName);
 
+    public static IntPtr ResolveKnownPanel(IntPtr mainWindow, IntPtr requestedHwnd)
+    {
+        if (mainWindow == IntPtr.Zero)
+            return IntPtr.Zero;
+
+        if (IsPanelControl(mainWindow, requestedHwnd))
+            return requestedHwnd;
+
+        var focused = GetFocusedControl(mainWindow);
+        if (IsPanelControl(mainWindow, focused))
+            return focused;
+
+        var published = GetPublishedActivePanel(mainWindow);
+        return IsPanelControl(mainWindow, published) ? published : IntPtr.Zero;
+    }
+
+    public static bool IsPanelControl(IntPtr mainWindow, IntPtr control)
+    {
+        if (mainWindow == IntPtr.Zero || control == IntPtr.Zero)
+            return false;
+
+        var className = GetClassNameValue(control);
+        if (DoubleCommanderPathHeuristics.IsEditorClass(className)
+            || !DoubleCommanderPathHeuristics.IsListHostClass(className))
+        {
+            return false;
+        }
+
+        return GetRootWindow(control) == mainWindow
+            && TryGetWindowRect(control, out var bounds)
+            && bounds.Width >= 120
+            && bounds.Height >= 120;
+    }
+
     public static bool IsVisible(IntPtr hwnd)
         => hwnd != IntPtr.Zero && IsWindowVisible(hwnd);
 
@@ -351,8 +382,24 @@ internal static class DoubleCommanderNativeMethods
 
             try
             {
-                _ = SendMessage(targetWindow, WmKeyDown, new IntPtr(VirtualKeyP), CreateKeyMessageParam(VirtualKeyP, keyUp: false));
-                _ = SendMessage(targetWindow, WmKeyUp, new IntPtr(VirtualKeyP), CreateKeyMessageParam(VirtualKeyP, keyUp: true));
+                var keyDownDelivered = SendMessageTimeout(
+                    targetWindow,
+                    WmKeyDown,
+                    new IntPtr(VirtualKeyP),
+                    CreateKeyMessageParam(VirtualKeyP, keyUp: false),
+                    SmtoAbortIfHung | SmtoBlock,
+                    TextMessageTimeoutMs,
+                    out _);
+                var keyUpDelivered = SendMessageTimeout(
+                    targetWindow,
+                    WmKeyUp,
+                    new IntPtr(VirtualKeyP),
+                    CreateKeyMessageParam(VirtualKeyP, keyUp: true),
+                    SmtoAbortIfHung | SmtoBlock,
+                    TextMessageTimeoutMs,
+                    out _);
+                if (keyDownDelivered == IntPtr.Zero || keyUpDelivered == IntPtr.Zero)
+                    return false;
             }
             finally
             {

@@ -14,7 +14,8 @@ public static class DoubleCommanderPathHeuristics
             return false;
 
         var name = Path.GetFileNameWithoutExtension(processName);
-        return name.StartsWith("doublecmd", StringComparison.OrdinalIgnoreCase);
+        return name.Equals("doublecmd", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("doublecmd64", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsMainWindowClass(string? className)

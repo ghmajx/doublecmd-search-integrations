@@ -43,6 +43,16 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
             return false;
         }
 
+        var root = DoubleCommanderNativeMethods.GetRootWindow(focusedHwnd);
+        if (root == IntPtr.Zero
+            || !DoubleCommanderPathHeuristics.IsMainWindowClass(
+                DoubleCommanderNativeMethods.GetClassNameValue(root))
+            || !DoubleCommanderPathHeuristics.IsDoubleCommanderProcess(
+                DoubleCommanderNativeMethods.GetProcessName(root)))
+        {
+            return false;
+        }
+
         if (DoubleCommanderPathHeuristics.IsFileListClass(className))
             return true;
 
@@ -51,15 +61,20 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
 
         // The generic LCL window class is shared by many controls, so only accept it when the window
         // belongs to a Double Commander main window and is large enough to be a file panel.
-        var root = DoubleCommanderNativeMethods.GetRootWindow(focusedHwnd);
-        return root != IntPtr.Zero
-            && DoubleCommanderPathHeuristics.IsMainWindowClass(
-                DoubleCommanderNativeMethods.GetClassNameValue(root))
-            && DoubleCommanderPathHeuristics.IsDoubleCommanderProcess(
-                DoubleCommanderNativeMethods.GetProcessName(root))
-            && DoubleCommanderNativeMethods.TryGetWindowRect(focusedHwnd, out var bounds)
+        return DoubleCommanderNativeMethods.TryGetWindowRect(focusedHwnd, out var bounds)
             && bounds.Width >= 120
             && bounds.Height >= 120;
+    }
+
+    public bool CanShowQuickNav(IntPtr hwndUnderCursor, string classNameUnderCursor)
+    {
+        if (hwndUnderCursor == IntPtr.Zero)
+            return false;
+
+        return CanRecognizeHost(
+            hwndUnderCursor,
+            classNameUnderCursor,
+            DoubleCommanderNativeMethods.GetProcessName(hwndUnderCursor));
     }
 
     public string? GetSearchScope(IntPtr hwnd)
@@ -71,9 +86,10 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         if (mainWindow == IntPtr.Zero)
             mainWindow = hwnd;
 
-        return DoubleCommanderPathReader.FindActivePath(
-            mainWindow,
-            DoubleCommanderNativeMethods.GetFocusedControl(mainWindow));
+        var panel = DoubleCommanderNativeMethods.ResolveKnownPanel(mainWindow, hwnd);
+        return panel == IntPtr.Zero
+            ? null
+            : DoubleCommanderPathReader.FindActivePath(mainWindow, panel);
     }
 
     public bool ExecuteItem(IntPtr hwnd, string path, string searchInput)
@@ -127,9 +143,19 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
                 LogLevel.Debug);
         }
 
+        // Lertaro passes the panel that had focus when the search was summoned. Prefer it because the
+        // inline window may have already taken focus by the time this callback runs.
+        if (DoubleCommanderNativeMethods.IsPanelControl(mainWindow, hwnd)
+            && DoubleCommanderNativeMethods.TryGetWindowRect(hwnd, out bounds))
+        {
+            DoubleCommanderNativeMethods.PublishActivePanel(mainWindow, hwnd);
+            source = "handle";
+            return true;
+        }
+
         // The panel that currently holds the focus, while Double Commander still has it.
         var focused = DoubleCommanderNativeMethods.GetFocusedControl(mainWindow);
-        if (IsPanelControl(mainWindow, focused)
+        if (DoubleCommanderNativeMethods.IsPanelControl(mainWindow, focused)
             && DoubleCommanderNativeMethods.TryGetWindowRect(focused, out bounds))
         {
             DoubleCommanderNativeMethods.PublishActivePanel(mainWindow, focused);
@@ -140,7 +166,7 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         // Panel recorded while Double Commander still had the focus (published by the hook process on every
         // focus change, so a panel switched with Tab is followed as well).
         var published = DoubleCommanderNativeMethods.GetPublishedActivePanel(mainWindow);
-        if (IsPanelControl(mainWindow, published)
+        if (DoubleCommanderNativeMethods.IsPanelControl(mainWindow, published)
             && DoubleCommanderNativeMethods.TryGetWindowRect(published, out bounds))
         {
             source = "published";
@@ -154,15 +180,6 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         if (TryResolvePanelUnderCursor(mainWindow, out bounds))
         {
             source = "cursor";
-            return true;
-        }
-
-        // Lertaro usually passes the main window, but its keyboard hook can also broadcast the focused
-        // panel; honour that when it really is one.
-        if (IsPanelControl(mainWindow, hwnd)
-            && DoubleCommanderNativeMethods.TryGetWindowRect(hwnd, out bounds))
-        {
-            source = "handle";
             return true;
         }
 
@@ -187,7 +204,7 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         var best = default(NativeRect);
         foreach (var child in DoubleCommanderNativeMethods.EnumerateChildWindows(mainWindow))
         {
-            if (!IsPanelControl(mainWindow, child)
+            if (!DoubleCommanderNativeMethods.IsPanelControl(mainWindow, child)
                 || !DoubleCommanderNativeMethods.TryGetWindowRect(child, out var candidate)
                 || !candidate.Contains(cursorX, cursorY))
             {
@@ -214,24 +231,6 @@ public sealed class DoubleCommanderInlineSearchAdapter : IInlineSearchAdapter
         return DoubleCommanderNativeMethods.TryGetWindowRect(hwnd, out var rect)
             ? $"{rect.Left},{rect.Top} {rect.Width}x{rect.Height}"
             : "(no rect)";
-    }
-
-    private static bool IsPanelControl(IntPtr mainWindow, IntPtr control)
-    {
-        if (control == IntPtr.Zero)
-            return false;
-
-        var className = DoubleCommanderNativeMethods.GetClassNameValue(control);
-        if (DoubleCommanderPathHeuristics.IsEditorClass(className))
-            return false;
-
-        if (!DoubleCommanderPathHeuristics.IsListHostClass(className))
-            return false;
-
-        return DoubleCommanderNativeMethods.GetRootWindow(control) == mainWindow
-            && DoubleCommanderNativeMethods.TryGetWindowRect(control, out var bounds)
-            && bounds.Width >= 120
-            && bounds.Height >= 120;
     }
 
     private static AdapterRect ToAdapterRect(NativeRect rect)

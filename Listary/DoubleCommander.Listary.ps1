@@ -38,9 +38,9 @@ if ([string]::IsNullOrWhiteSpace($queryPath)) {
     throw '没有可打开的路径：请提供 {query}，或从文件资源管理器范围调用并提供 {current_folder}。'
 }
 
-if (-not [System.IO.Path]::IsPathRooted($queryPath)) {
+if (-not [System.IO.Path]::IsPathFullyQualified($queryPath)) {
     $hasAbsoluteCurrentFolder = -not [string]::IsNullOrWhiteSpace($currentPath) -and
-        [System.IO.Path]::IsPathRooted($currentPath)
+        [System.IO.Path]::IsPathFullyQualified($currentPath)
     if (-not $hasAbsoluteCurrentFolder) {
         throw '相对路径必须配合绝对的 {current_folder} 使用。'
     }

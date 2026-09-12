@@ -45,11 +45,10 @@ public sealed class DoubleCommanderPathCollector : IActivePathCollector
         if (!CanHandle(mainWindow, resolvedClassName, resolvedProcessName))
             return null;
 
-        var focused = activeHwnd != IntPtr.Zero
-            ? activeHwnd
-            : DoubleCommanderNativeMethods.GetFocusedControl(mainWindow);
-
-        return DoubleCommanderPathReader.FindActivePath(mainWindow, focused);
+        var panel = DoubleCommanderNativeMethods.ResolveKnownPanel(mainWindow, activeHwnd);
+        return panel == IntPtr.Zero
+            ? null
+            : DoubleCommanderPathReader.FindActivePath(mainWindow, panel);
     }
 
     public IReadOnlyList<OpenedFolder> GetOpenedFolders()

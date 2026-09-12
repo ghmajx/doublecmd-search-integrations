@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: Lertaro/Lertaro
-          path: Lertaro
+          path: LertaroSdk
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v5
@@ -35,13 +35,13 @@ jobs:
       - name: Build Lertaro plugin
         shell: pwsh
         run: >-
-          dotnet build .\src\DoubleCommander.csproj
+          dotnet build .\Lertaro\DoubleCommander.csproj
           --configuration Release
-          -p:LertaroRoot="${{ github.workspace }}\Lertaro"
+          -p:LertaroRoot="${{ github.workspace }}\LertaroSdk"
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
           name: Lertaro-DoubleCommander
-          path: src\bin\Release\net10.0-windows\Lertaro.Plugins.DoubleCommander.dll
+          path: Lertaro\bin\Release\net10.0-windows\Lertaro.Plugins.DoubleCommander.dll
           if-no-files-found: error

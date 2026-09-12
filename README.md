@@ -2,8 +2,8 @@
 
 这是一个面向 Windows 的 Double Commander 搜索集成项目，包含两部分：
 
-- `src/`：Lertaro 原生插件；
-- `listary/`：Listary 自定义命令桥接脚本。
+- `Lertaro/`：Lertaro 原生插件；
+- `Listary/`：Listary 自定义命令桥接脚本。
 
 Lertaro 部分的目标是让 Lertaro 在 Double Commander 中获得与官方 Total Commander 适配相同的核心体验：
 
@@ -20,13 +20,13 @@ Double Commander 没有 Total Commander 那种可用于“查询当前面板路�
 需要 .NET 10 SDK。最稳妥的方式是使用官方 Lertaro 源码中的 `PluginSdk`：
 
 ```powershell
-dotnet build .\src\DoubleCommander.csproj -c Release -p:LertaroRoot="C:\src\Lertaro"
+dotnet build .\Lertaro\DoubleCommander.csproj -c Release -p:LertaroRoot="C:\src\Lertaro"
 ```
 
 如果只有已安装的 SDK DLL，也可以这样构建：
 
 ```powershell
-dotnet build .\src\DoubleCommander.csproj -c Release -p:LertaroSdkDll="C:\path\to\Lertaro.PluginSdk.dll"
+dotnet build .\Lertaro\DoubleCommander.csproj -c Release -p:LertaroSdkDll="C:\path\to\Lertaro.PluginSdk.dll"
 ```
 
 指定 `LertaroRoot` 时，构建完成后会自动复制到：
@@ -51,7 +51,7 @@ dotnet run --project .\tests\DoubleCommander.Heuristics.Tests.csproj
 
 Listary 目前没有可验证的、类似 Double Commander/Total Commander 插件 API 的公开原生插件 SDK。因此本项目不伪装成“Listary 原生插件”，而是使用 Listary 官方支持的自定义命令完成同一件实用的事：把当前目录或输入的路径交给 Double Commander 打开。
 
-Listary 官方 Commands 支持 `"{query}"` 和 `"{current_folder}"` 参数；桥接脚本见 `listary/DoubleCommander.Listary.ps1`。它不依赖 Listary v7 的测试版 HTTP API，因此版本变化时影响更小。
+Listary 官方 Commands 支持 `"{query}"` 和 `"{current_folder}"` 参数；桥接脚本见 `Listary/DoubleCommander.Listary.ps1`。它不依赖 Listary v7 的测试版 HTTP API，因此版本变化时影响更小。
 
 ### 配置 Listary
 
@@ -71,7 +71,7 @@ Listary 官方 Commands 支持 `"{query}"` 和 `"{current_folder}"` 参数；桥
 桥接脚本支持 `-DryRun`，可在不启动 Double Commander 的情况下检查参数：
 
 ```powershell
-pwsh -NoProfile -File .\listary\DoubleCommander.Listary.ps1 `
+pwsh -NoProfile -File .\Listary\DoubleCommander.Listary.ps1 `
   -Query 'report.pdf' -CurrentFolder 'C:\Work' -DryRun
 ```
 
